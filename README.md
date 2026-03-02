@@ -4,7 +4,7 @@ Prometheus exporter for TP-Link Omada Controller WiFi station metrics. Fork of [
 
 ## Controller v6 Compatibility
 
-The upstream exporter was tested against Omada Controller v5.9. Controller v6 returns API version 3, which requires the site **ID** (not name) in API paths. This fork adds a `SiteID()` method that prefers `id` over `key` over `name`, making the exporter compatible with both Controller v5 and v6.
+The upstream exporter ([jamessanford/omada-controller-exporter](https://github.com/jamessanford/omada-controller-exporter)) targets Controller v5 which uses the site **name** or **key** in API paths. Controller v6 returns API version 3 and requires the site **ID** instead. This fork adds a `SiteID()` method that prefers `id` over `key` over `name`, making the exporter compatible with both Controller v5 and v6.
 
 ## Metrics
 
@@ -66,6 +66,11 @@ scrape_configs:
     static_configs:
       - targets: ['10.0.0.3:6779']
 ```
+
+## Tested with
+
+- Omada Controller **v6.1.0.19**
+- TP-Link **EAP610** access point
 
 ## License
 

@@ -16,6 +16,8 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H truenas-host.gyorffy.network >> ~/.ssh/known_hosts 2>/dev/null
 
+          SSH_OPTS="-o StrictHostKeyChecking=no -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519"
+
           echo "Deploying prometheus-exporter-omada-controller..."
-          ssh -o StrictHostKeyChecking=no truenas-host.gyorffy.network \
+          ssh $SSH_OPTS attila@truenas-host.gyorffy.network \
             "sudo midclt call app.pull_images prometheus-exporter-omada-controller && sudo midclt call app.redeploy prometheus-exporter-omada-controller"

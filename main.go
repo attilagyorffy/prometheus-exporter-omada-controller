@@ -1,85 +1,74 @@
 package main
 
-// Export wireless station metrics from an Omada WiFi Controller
-
 import (
-	"flag"
-	"io"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 
-	"github.com/jamessanford/omada-controller-exporter/collector"
-	"github.com/jamessanford/omada-controller-exporter/omada"
+	"github.com/attilagyorffy/prometheus-exporter-omada-controller/collector"
+	"github.com/attilagyorffy/prometheus-exporter-omada-controller/omada"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.uber.org/zap"
 )
-
-var (
-	configFile = flag.String("config", "", "path to YAML config")
-	httpAddr   = flag.String("http", ":6779", "listen on this address")
-)
-
-const usageMessage = `Connect to a TP-Link Omada Controller and expose metrics.
-
-Usage:
-    omada-controller-exporter [-config <file>] [-http <listen address>]
-
-Configuration:
-    Use either -config <file> against a YAML file like this:
-
-path: https://192.168.255.123:8043/
-user: admin
-pass: foo
-secure: false
-
-    Or configure via environment variables:
-
-OMADA_PATH=https://192.168.255.123:8043/
-OMADA_USER=admin
-OMADA_PASS=foo
-OMADA_SECURE=false
-
-Options:
-`
-
-func usage() {
-	os.Stderr.Write([]byte(usageMessage))
-	flag.PrintDefaults()
-}
 
 func main() {
-	flag.Usage = usage
-	flag.Parse()
+	port := envOrDefault("LISTEN_PORT", "6779")
+	omadaURL := envOrDefault("OMADA_URL", "https://10.0.0.3:30077")
+	omadaUser := os.Getenv("OMADA_USER")
+	omadaPass := os.Getenv("OMADA_PASS")
+	insecure := strings.ToLower(envOrDefault("OMADA_INSECURE", "true"))
+	logLevel := envOrDefault("LOG_LEVEL", "info")
 
-	logger, err := zap.NewProduction()
-	if err != nil {
-		panic(err)
+	setupLogging(logLevel)
+
+	if omadaUser == "" || omadaPass == "" {
+		slog.Error("OMADA_USER and OMADA_PASS environment variables are required")
+		os.Exit(1)
 	}
 
-	config, err := omada.ParseConfig(*configFile)
+	skipVerify := insecure == "true" || insecure == "1"
+
+	controller, err := omada.NewClient(omadaURL, omadaUser, omadaPass, skipVerify)
 	if err != nil {
-		panic(err)
+		slog.Error("failed to connect to Omada controller", "error", err)
+		os.Exit(1)
 	}
 
-	controller, err := omada.NewClient(logger, config)
-	if err != nil {
-		panic(err)
-	}
+	prometheus.MustRegister(collector.New(controller))
 
-	prometheus.MustRegister(collector.NewOmadaCollector(logger, controller))
-
-	http.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = io.WriteString(w, "omada-controller-exporter")
-	})
 	http.Handle("/metrics", promhttp.Handler())
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "Omada Controller Exporter\n\nVisit /metrics for Prometheus metrics.\n")
+	})
 
-	logger.Info(
-		"listening",
-		zap.String("address", *httpAddr),
-	)
-	if err := http.ListenAndServe(*httpAddr, nil); err != nil {
-		logger.Fatal("ListenAndServe", zap.Error(err))
+	addr := ":" + port
+	slog.Info("starting exporter", "address", addr, "omada_url", omadaURL)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		slog.Error("server failed", "error", err)
+		os.Exit(1)
 	}
+}
+
+func envOrDefault(key, defaultVal string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return defaultVal
+}
+
+func setupLogging(level string) {
+	var l slog.Level
+	switch level {
+	case "debug":
+		l = slog.LevelDebug
+	case "warn":
+		l = slog.LevelWarn
+	case "error":
+		l = slog.LevelError
+	default:
+		l = slog.LevelInfo
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: l})))
 }

@@ -1,7 +1,7 @@
 package collector
 
 import (
-	"github.com/jamessanford/omada-controller-exporter/omada"
+	"github.com/attilagyorffy/prometheus-exporter-omada-controller/omada"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

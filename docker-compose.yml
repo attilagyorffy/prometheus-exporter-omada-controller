@@ -1,0 +1,12 @@
+services:
+  omada-controller-exporter:
+    image: ghcr.io/attilagyorffy/prometheus-exporter-omada-controller:latest
+    container_name: omada-controller-exporter
+    restart: unless-stopped
+    environment:
+      - OMADA_URL=https://10.0.0.3:30077
+      - OMADA_USER=${OMADA_USER}
+      - OMADA_PASS=${OMADA_PASS}
+      - OMADA_INSECURE=true
+    ports:
+      - "6779:6779"

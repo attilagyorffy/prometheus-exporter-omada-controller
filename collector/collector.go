@@ -1,12 +1,12 @@
 package collector
 
 import (
+	"log/slog"
 	"strings"
 	"time"
 
-	"github.com/jamessanford/omada-controller-exporter/omada"
+	"github.com/attilagyorffy/prometheus-exporter-omada-controller/omada"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
 )
 
 // Instrumentation for the collector itself.
@@ -34,15 +34,14 @@ func init() {
 	prometheus.MustRegister(omadaCollectorDuration)
 }
 
-// collector implements the prometheus.Collector interface.
-type collector struct {
-	logger     *zap.Logger
+// Collector implements the prometheus.Collector interface.
+type Collector struct {
 	controller *omada.Client
 }
 
-// NewOmadaCollector returns a prometheus.Collector that exports wifi station data.
-func NewOmadaCollector(logger *zap.Logger, controller *omada.Client) prometheus.Collector {
-	return &collector{logger: logger, controller: controller}
+// New returns a prometheus.Collector that exports wifi station data.
+func New(controller *omada.Client) *Collector {
+	return &Collector{controller: controller}
 }
 
 // fixMAC adjusts address format from 00-00-00-FF-FF-FF to 00:00:00:ff:ff:ff.
@@ -50,13 +49,13 @@ func fixMAC(mac string) string {
 	return strings.ToLower(strings.ReplaceAll(mac, "-", ":"))
 }
 
-func (c *collector) Describe(ch chan<- *prometheus.Desc) {
+func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
 	for _, m := range stationMetrics {
 		ch <- m.Desc
 	}
 }
 
-func (c *collector) Collect(ch chan<- prometheus.Metric) {
+func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	omadaCollectionsTotal.Inc()
 	start := time.Now()
 	defer func() {
@@ -67,15 +66,15 @@ func (c *collector) Collect(ch chan<- prometheus.Metric) {
 	sites, err := c.controller.Sites()
 	if err != nil {
 		omadaErrorsTotal.Inc()
-		c.logger.Error("failed to get sites", zap.Error(err))
+		slog.Error("failed to get sites", "error", err)
 		return
 	}
 
 	for _, site := range sites {
-		stations, err := c.controller.ConnectedClients(site.Name)
+		stations, err := c.controller.ConnectedClients(site.SiteID())
 		if err != nil {
 			omadaErrorsTotal.Inc()
-			c.logger.Error("failed to get clients", zap.Error(err))
+			slog.Error("failed to get clients", "error", err)
 			continue // try the next site
 		}
 

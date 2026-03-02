@@ -7,14 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 var (
@@ -24,7 +23,6 @@ var (
 
 // Client connects to an Omada Controller.
 type Client struct {
-	logger     *zap.Logger
 	http       *http.Client
 	configPath string
 	username   string
@@ -34,10 +32,10 @@ type Client struct {
 	mu         sync.Mutex
 }
 
-// NewClient returns a client that talks an Omada Controller.
-func NewClient(logger *zap.Logger, config *Config) (*Client, error) {
+// NewClient returns a client that talks to an Omada Controller.
+func NewClient(path, username, password string, insecure bool) (*Client, error) {
 	transport := &http.Transport{}
-	if !config.Secure {
+	if insecure {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 
@@ -47,16 +45,15 @@ func NewClient(logger *zap.Logger, config *Config) (*Client, error) {
 	}
 
 	c := Client{
-		logger: logger,
 		http: &http.Client{
 			Transport: transport,
 			Jar:       jar,
 			Timeout:   defaultTimeout,
 		},
-		configPath: config.Path,
-		baseURL:    strings.TrimSuffix(config.Path, "/"),
-		username:   config.Username,
-		password:   config.Password,
+		configPath: path,
+		baseURL:    strings.TrimSuffix(path, "/"),
+		username:   username,
+		password:   password,
 	}
 
 	if err = c.authenticate(); err != nil {
@@ -66,7 +63,7 @@ func NewClient(logger *zap.Logger, config *Config) (*Client, error) {
 	return &c, nil
 }
 
-// Token returns the auth token for the controller.  Some URLs may need it.
+// Token returns the auth token for the controller. Some URLs may need it.
 func (c *Client) Token() string {
 	c.mu.Lock()
 	t := c.token
@@ -80,7 +77,7 @@ func (c *Client) SetToken(token string) {
 	c.mu.Unlock()
 }
 
-// BaseURL returns the path to the Omada controller.  When authenticated,
+// BaseURL returns the path to the Omada controller. When authenticated,
 // this will include the Controller ID as of Omada 5.x.
 func (c *Client) BaseURL() string {
 	c.mu.Lock()
@@ -197,6 +194,8 @@ func (c *Client) authenticate() error {
 	if ir.Result.ControllerID == "" {
 		return fmt.Errorf("missing controller ID: %v: %q", ir.ErrorCode, ir.Msg)
 	}
+
+	slog.Debug("authenticated", "controller_id", ir.Result.ControllerID)
 
 	err = c.SetBaseURL(ir.Result.ControllerID)
 	if err != nil {

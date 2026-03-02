@@ -2,9 +2,8 @@ package omada
 
 import (
 	"fmt"
+	"log/slog"
 	"net/url"
-
-	"go.uber.org/zap"
 )
 
 const maxPages = 10 // as a precaution, stop fetching clients after this many pages
@@ -106,9 +105,9 @@ func (c *Client) ConnectedClients(site string) ([]*ConnectedClient, error) {
 	}
 
 	if currentPage > maxPages {
-		c.logger.Warn("stopped fetching clients after too many pages",
-			zap.Int("pages", maxPages),
-			zap.Int("clients", len(clients)),
+		slog.Warn("stopped fetching clients after too many pages",
+			"pages", maxPages,
+			"clients", len(clients),
 		)
 	}
 

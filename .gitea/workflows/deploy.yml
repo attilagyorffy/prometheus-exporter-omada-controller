@@ -1,0 +1,21 @@
+name: Deploy to TrueNAS
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy
+        run: |
+          apt-get update -qq && apt-get install -y -qq openssh-client > /dev/null 2>&1
+          mkdir -p ~/.ssh
+          echo "${{ secrets.TRUENAS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H truenas-host.gyorffy.network >> ~/.ssh/known_hosts 2>/dev/null
+
+          echo "Deploying prometheus-exporter-omada-controller..."
+          ssh -o StrictHostKeyChecking=no truenas-host.gyorffy.network \
+            "sudo midclt call app.pull_images prometheus-exporter-omada-controller && sudo midclt call app.redeploy prometheus-exporter-omada-controller"
